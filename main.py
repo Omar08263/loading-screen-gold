@@ -1,44 +1,48 @@
-"""Loading Screen Gold — entry program (program/v1, Python 3.13, stdlib only).
+"""Loading Screen Gold entry.
 
-Writes one original line (a single line, <= 200 characters): a loading-screen
-tip for stressed developers and AI coding agents, to /output/entry.txt (or
-$MAKEFUN_OUTPUT_DIR/entry.txt when set, for local runs). Deterministic: the
-same bytes on every run; no network, no randomness, no reads outside this
-file.
+A tiny program for make.fun's one-line loading-screen-tip bounty. It writes
+one tip — a single line for stressed developers and AI coding agents — to
+/output/entry.txt, where the house judge picks it up. Standard library only:
+no network, no randomness, and the output is byte-identical on every run.
 """
 
 import os
+from pathlib import Path
 
-LINE = "Tip: Nobody knows why it works now. The agent won't ask. You won't ask. Just ship it quietly."
+TIP = "Tip: Nobody knows why it works now. The agent won't ask. You won't ask. Just ship it quietly."
 
-# The line, judged against the brief: a real tip (don't ask, ship it), a
-# turn in the last three words, both the developer and the agent in the
-# same silence pact, and no coffee/deadline/compile rerun.
+# The gate allows 1-200 characters, a single line, more than whitespace.
+if not 1 <= len(TIP) <= 200:
+    raise SystemExit(f"tip is {len(TIP)} characters, must be 1-200")
+if not TIP.strip():
+    raise SystemExit("tip must not be only whitespace")
+if "\n" in TIP:
+    raise SystemExit("tip must be a single line")
 
-# Gate the line itself: 1-200 characters, not only whitespace, one line.
-assert 1 <= len(LINE) <= 200, f"line is {len(LINE)} chars, must be 1-200"
-assert LINE.strip(), "line must not be only whitespace"
-assert "\n" not in LINE, "line must be a single line"
+
+def resolve_out_dir() -> Path:
+    """Where the entry goes: $MAKEFUN_OUTPUT_DIR, else the harness /output."""
+    configured = os.environ.get("MAKEFUN_OUTPUT_DIR")
+    return Path(configured) if configured else Path("/output")
 
 
-def main() -> None:
-    # An empty MAKEFUN_OUTPUT_DIR (exported but blank) must not break the
-    # run: fall back to the harness default /output, as the grader provides.
-    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR") or "/output"
-    os.makedirs(out_dir, exist_ok=True)
-    path = os.path.join(out_dir, "entry.txt")
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(LINE)
-    # Deterministic permissions for the grader: the entry must be readable
-    # (0644) no matter what umask the sandbox runs with.
-    os.chmod(path, 0o644)
-    # Read-back check: the file on disk must hold exactly the approved
-    # line, byte for byte; otherwise fail loudly, never silently.
-    with open(path, "r", encoding="utf-8", newline="\n") as f:
+def write_entry() -> Path:
+    """Write the tip and pin the file readable (0644) whatever the umask."""
+    out_dir = resolve_out_dir()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    target = out_dir / "entry.txt"
+    target.write_text(TIP, encoding="utf-8", newline="\n")
+    target.chmod(0o644)
+    return target
+
+
+def verify(target: Path) -> None:
+    """Fail loudly unless the file on disk is exactly the approved tip."""
+    with open(target, encoding="utf-8", newline="\n") as f:
         written = f.read()
-    if written != LINE:
-        raise SystemExit("entry.txt does not match the approved line")
+    if written != TIP:
+        raise SystemExit("entry.txt does not match the approved tip")
 
 
 if __name__ == "__main__":
-    main()
+    verify(write_entry())
